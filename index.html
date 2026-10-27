@@ -109,7 +109,11 @@
     @media (max-width:580px) { .shell { padding:20px 16px 45px; } .site-head { margin-bottom:30px; } h1 { letter-spacing:-2.5px; } .hero-art { display:none; } .hero { margin-bottom:30px; } .action-grid { grid-template-columns:1fr; } .panel { padding:20px; border-radius:16px; } .session-hero h1 { font-size:35px; } .board { grid-template-columns:1fr; gap:12px; } .sticky { min-height:140px; transform:none; } .head-right .pill { display:none; } .control-row .btn { width:100%; } .stat-grid { grid-template-columns:1fr 1fr; } }
     @media print { body { background:#fff; } .shell { max-width:none; padding:0; } .site-head, #homeView, #lobbyView, #writingView, #toast, .board-toolbar .tools, .session-top, footer { display:none!important; } #sessionView, #revealView { display:block!important; } .session-hero { margin:0 0 14px; } .session-hero h1 { font-size:27px; color:#000; } .session-hero p { font-size:11px; } .board { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding:0; } .sticky { transform:none; min-height:130px; border:1px solid #ddd; break-inside:avoid; -webkit-print-color-adjust:exact; print-color-adjust:exact; } .sticky .words { font-size:14px; } }
   </style>
-  <script defer src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script defer src="firebase-config.js"></script>
+  <script defer src="app.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 </head>
 <body>
@@ -133,6 +137,9 @@
           <div class="art-note art-3">That's actually a fun idea!</div>
         </div>
       </div>
+      <div id="setupNotice" class="tip" style="margin:0 0 22px; border:1px solid #e6cfa1; background:#fff5e2; color:#66522d; display:none">
+        <strong>One-time setup required:</strong> The website owner needs to connect Firebase before rooms can be created. Follow the README included with the files.
+      </div>
       <div class="action-grid">
         <div class="panel">
           <div class="panel-icon">✦</div><h2>Start a session</h2>
@@ -148,7 +155,7 @@
           <div id="codeHint" style="font-size:11px;color:#98919d;margin-top:9px">Letters and numbers, no password required.</div>
         </form>
       </div>
-      <p class="tiny-note">🔒 Ideas stay in your browsers, not a database. Your room disappears when the host leaves.</p>
+      <p class="tiny-note">☁️ Temporary live room on Firebase. No accounts to create, and the room is deleted when the host leaves.</p>
     </section>
 
     <section id="sessionView" class="hidden" aria-label="Brainwriting room">
@@ -168,7 +175,7 @@
               <div style="height:1px;background:#f0edf0;margin:27px 0"></div>
               <h3>Ready to write?</h3><p class="sub" style="margin-bottom:10px">Choose how long everyone gets to brainstorm.</p>
               <div class="control-row"><div class="duration"><label class="field-label" for="durationSelect">Writing time</label><select class="field-select" id="durationSelect"><option value="3">3 minutes</option><option value="5" selected>5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="20">20 minutes</option></select></div><button id="startBtn" class="btn btn-primary">Start writing →</button></div>
-              <p class="tip" style="margin:16px 0 0">You can begin before your partner joins. Only the room creator can start or end a round.</p>
+              <p class="tip" style="margin:16px 0 0">The Start button unlocks when your partner joins. Both people wait in the lobby until you press Start.</p>
             </div>
             <div id="guestWaiting" class="hidden tip" style="margin-top:20px">You're connected! The room creator will start the timer.</div>
           </div>
@@ -198,285 +205,10 @@
       </div>
     </section>
 
-    <footer>Made for thinking together. <span aria-hidden="true">♡</span> No signups, no permanent storage.</footer>
+    <footer>Made for thinking together. <span aria-hidden="true">♡</span> Temporary room data · No personal sign-up required.</footer>
   </main>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script>
-    'use strict';
-    (() => {
-      const $ = (id) => document.getElementById(id);
-      const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      const PEER_PREFIX = 'brainwrite-room-v1-';
-      const MAX_IDEA_LENGTH = 280;
-      let peer = null, connection = null, role = null, code = '';
-      let phase = 'lobby', duration = 5, endsAt = 0, clockOffset = 0;
-      let ideas = [], ownIdeas = [], guestConnected = false;
-      let toastTimeout = null;
-      let connectionTimeout = null;
-      let requestSerial = 0;
-      const oldJoinParam = new URLSearchParams(location.search).get('room');
 
-      const randomId = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
-      const roomPeerId = (roomCode) => PEER_PREFIX + roomCode.toLowerCase();
-      const newCode = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (v) => CODE_CHARS[v % CODE_CHARS.length]).join('');
-      const cleanCode = (value) => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-      const isValidCode = (value) => value.length === 6 && [...value].every((c) => CODE_CHARS.includes(c));
-      const textFromUser = (value) => typeof value === 'string' ? value.trim().slice(0, MAX_IDEA_LENGTH) : '';
-      const send = (data) => { if (connection && connection.open) { try { connection.send(data); return true; } catch (e) { console.warn('Send failed', e); } } return false; };
-      const showToast = (message) => { clearTimeout(toastTimeout); $('toast').textContent = message; $('toast').classList.add('show'); toastTimeout = setTimeout(() => $('toast').classList.remove('show'), 4000); };
-      const show = (id, visible) => $(id).classList.toggle('hidden', !visible);
-      const updateBrowserUrl = (suffix = '') => { if (location.protocol === 'https:' || location.protocol === 'http:') { try { history.replaceState({}, '', location.pathname + suffix); } catch (_) {} } };
-      const setBusy = (busy) => { $('createBtn').disabled = busy; $('joinBtn').disabled = busy; $('createBtn').textContent = busy ? 'Creating…' : 'Create a room →'; $('joinBtn').textContent = busy ? 'Connecting…' : 'Join room →'; };
-
-      function cleanupPeer() {
-        clearTimeout(connectionTimeout);
-        const oldPeer = peer;
-        const oldConn = connection;
-        peer = null; connection = null;
-        if (oldConn) { try { oldConn.close(); } catch (_) {} }
-        if (oldPeer) { try { oldPeer.destroy(); } catch (_) {} }
-      }
-      function resetToHome(message = '') {
-        requestSerial++;
-        cleanupPeer();
-        role = null; code = ''; phase = 'lobby'; ideas = []; ownIdeas = []; guestConnected = false; endsAt = 0; clockOffset = 0;
-        show('homeView', true); show('sessionView', false); setBusy(false);
-        if (message) showToast(message);
-      }
-      function updateConnectionLabel() {
-        const online = role === 'host' ? guestConnected : !!connection?.open;
-        $('connectionDot').classList.toggle('connected', online);
-        $('connectionText').textContent = role === 'host' ? (online ? '2 people connected' : 'Waiting for partner') : (online ? 'Connected to room' : 'Connecting…');
-      }
-      function render() {
-        show('homeView', !role); show('sessionView', !!role);
-        if (!role) return;
-        $('roomChip').textContent = code;
-        $('roomCodeDisplay').textContent = code;
-        show('lobbyView', phase === 'lobby');
-        show('writingView', phase === 'writing');
-        show('revealView', phase === 'reveal');
-        show('hostControls', role === 'host');
-        show('guestWaiting', role === 'guest');
-        show('endEarlyArea', role === 'host');
-        show('newRoundBtn', role === 'host');
-        $('lobbyDescription').textContent = role === 'host' ? 'Share the code with your partner, then start when you’re ready.' : 'You made it! Wait for the room creator to start the round.';
-        if (role === 'guest') $('guestWaiting').textContent = connection?.open ? 'You’re in! The room creator controls when the timer starts.' : 'Connecting to the room…';
-        updateConnectionLabel();
-        if (phase === 'writing') { renderOwnIdeas(); updateTimer(); }
-        if (phase === 'reveal') renderBoard();
-      }
-      function renderOwnIdeas() {
-        const list = $('myIdeaList');
-        list.replaceChildren();
-        $('ownCount').textContent = `${ownIdeas.length} ${ownIdeas.length === 1 ? 'note' : 'notes'}`;
-        show('myIdeasEmpty', ownIdeas.length === 0);
-        ownIdeas.forEach((item, i) => {
-          const li = document.createElement('li');
-          const number = document.createElement('span'); number.className = 'num-small'; number.textContent = String(i + 1).padStart(2, '0');
-          const content = document.createElement('span'); content.style.whiteSpace = 'pre-wrap'; content.textContent = item.text;
-          if (item.pending) content.title = 'Waiting for confirmation';
-          li.append(number, content); list.appendChild(li);
-        });
-      }
-      function renderBoard() {
-        const board = $('board'); board.replaceChildren();
-        $('totalCount').textContent = `${ideas.length} ${ideas.length === 1 ? 'idea' : 'ideas'}`;
-        if (!ideas.length) { const empty = document.createElement('div'); empty.className = 'board-empty'; empty.textContent = 'No ideas were added this round. Want to try another?'; board.appendChild(empty); return; }
-        ideas.forEach((idea, i) => {
-          const card = document.createElement('article'); card.className = 'sticky'; card.style.setProperty('--angle', `${[-1.4, 1.1, -0.8, 1.4, .3][i % 5]}deg`);
-          const count = document.createElement('span'); count.className = 'count'; count.textContent = `IDEA ${String(i + 1).padStart(2, '0')}`;
-          const words = document.createElement('div'); words.className = 'words'; words.textContent = idea.text;
-          card.append(count, words); board.appendChild(card);
-        });
-      }
-      function remainingMs() { return Math.max(0, endsAt - (Date.now() + (role === 'guest' ? clockOffset : 0))); }
-      function updateTimer() {
-        if (phase !== 'writing') return;
-        const remaining = remainingMs();
-        const seconds = Math.ceil(remaining / 1000);
-        const mm = Math.floor(seconds / 60).toString().padStart(2, '0');
-        const ss = (seconds % 60).toString().padStart(2, '0');
-        $('timerBig').textContent = `${mm}:${ss}`;
-        $('timerFill').style.width = `${Math.max(0, Math.min(100, remaining / (duration * 60000) * 100))}%`;
-      }
-      setInterval(() => { if (phase !== 'writing') return; updateTimer(); if (role === 'host' && remainingMs() <= 0) finishRound(); }, 220);
-
-      function hostSync() {
-        send({ type: 'sync', phase, duration, endsAt, hostNow: Date.now(), myIdeas: ideas.filter(x => x.author === 'guest'), allIdeas: phase === 'reveal' ? ideas : undefined });
-      }
-      function setupHostConnection(incoming) {
-        if (role !== 'host' || (connection && connection !== incoming)) {
-          incoming.on('open', () => { try { incoming.send({ type:'full' }); } finally { setTimeout(() => incoming.close(), 100); } }); return;
-        }
-        connection = incoming;
-        incoming.on('open', () => { if (connection !== incoming || role !== 'host') return; guestConnected = true; hostSync(); updateConnectionLabel(); });
-        incoming.on('data', (msg) => {
-          if (connection !== incoming || role !== 'host' || !msg || typeof msg !== 'object') return;
-          if (msg.type === 'idea' && phase === 'writing') {
-            const clean = textFromUser(msg.text);
-            const id = typeof msg.id === 'string' && /^[a-z0-9-]{1,90}$/i.test(msg.id) ? msg.id : '';
-            if (!clean || !id) return;
-            if (!ideas.some((x) => x.id === id)) ideas.push({ id, text:clean, author:'guest' });
-            send({ type:'ack', id });
-          }
-        });
-        incoming.on('close', () => { if (connection !== incoming) return; connection = null; guestConnected = false; updateConnectionLabel(); if (phase === 'lobby') render(); showToast('Your partner disconnected. They can rejoin with the same code.'); });
-        incoming.on('error', (error) => console.warn('Partner connection error:', error));
-      }
-      function createRoom() {
-        if (typeof Peer !== 'function') return showToast('The connection library did not load. Check your internet connection and reload.');
-        const token = ++requestSerial;
-        setBusy(true); code = newCode(); role = 'host'; phase = 'lobby'; ideas = []; ownIdeas = []; guestConnected = false;
-        try { peer = new Peer(roomPeerId(code)); } catch (e) { return resetToHome('Could not create a room. Please try again.'); }
-        peer.on('open', () => { if (token !== requestSerial) return; setBusy(false); updateBrowserUrl(); render(); });
-        peer.on('connection', setupHostConnection);
-        peer.on('error', (error) => {
-          if (token !== requestSerial) return;
-          console.warn('Peer error:', error);
-          if (error.type === 'unavailable-id') resetToHome('That room code was already taken. Try creating another.');
-          else if (error.type === 'network' || error.type === 'server-error' || error.type === 'socket-error') showToast('Connection service unavailable. Try again in a moment.');
-        });
-        connectionTimeout = setTimeout(() => { if (token === requestSerial && !peer?.open) resetToHome('Could not connect to the room service. Please retry.'); }, 16000);
-      }
-      function joinRoom(inputCode) {
-        if (typeof Peer !== 'function') return showToast('The connection library did not load. Check your internet connection and reload.');
-        const requestedCode = cleanCode(inputCode);
-        if (!isValidCode(requestedCode)) return showToast('Enter a valid six-character code.');
-        const token = ++requestSerial; setBusy(true);
-        role = 'guest'; code = requestedCode; phase = 'lobby'; ideas = []; ownIdeas = [];
-        try { peer = new Peer(); } catch (e) { return resetToHome('Could not connect. Please try again.'); }
-        peer.on('open', () => {
-          if (token !== requestSerial) return;
-          connection = peer.connect(roomPeerId(code), { reliable:true, serialization:'json' });
-          connection.on('open', () => { if (token !== requestSerial) return; clearTimeout(connectionTimeout); setBusy(false); updateBrowserUrl('?room=' + encodeURIComponent(code)); render(); send({ type:'hello' }); });
-          connection.on('data', (msg) => { if (token === requestSerial) handleGuestMessage(msg); });
-          connection.on('close', () => { if (token !== requestSerial) return; resetToHome('The room creator left, or your connection was lost. This room has ended.'); });
-          connection.on('error', (error) => { if (token !== requestSerial) return; console.warn('Connection error', error); resetToHome('Could not connect to this room. Check the code and try again.'); });
-        });
-        peer.on('error', (error) => {
-          if (token !== requestSerial) return;
-          console.warn('Peer error:', error);
-          if (error.type === 'peer-unavailable') resetToHome('Room not found. Check the code and make sure the host is online.');
-          else if (error.type === 'network' || error.type === 'server-error' || error.type === 'socket-error') resetToHome('Connection service unavailable. Please try again.');
-        });
-        connectionTimeout = setTimeout(() => { if (token === requestSerial && !connection?.open) resetToHome('Could not join this room. Check the code or try again.'); }, 17000);
-      }
-      function handleGuestMessage(msg) {
-        if (!msg || typeof msg !== 'object') return;
-        if (msg.type === 'full') { resetToHome('This room already has two people.'); return; }
-        if (msg.type === 'sync') {
-          if (!['lobby','writing','reveal'].includes(msg.phase)) return;
-          const hostNow = Number(msg.hostNow);
-          if (Number.isFinite(hostNow)) clockOffset = hostNow - Date.now();
-          phase = msg.phase; duration = Number(msg.duration) || 5; endsAt = Number(msg.endsAt) || 0;
-          ownIdeas = Array.isArray(msg.myIdeas) ? msg.myIdeas.filter(x => x && typeof x.text === 'string').map(x => ({...x, pending:false})) : [];
-          ideas = phase === 'reveal' && Array.isArray(msg.allIdeas) ? msg.allIdeas.filter(x => x && typeof x.text === 'string') : [];
-          render(); if (phase === 'writing') $('ideaInput').focus();
-        } else if (msg.type === 'start') {
-          phase = 'writing'; duration = Number(msg.duration) || 5; endsAt = Number(msg.endsAt) || 0;
-          if (Number.isFinite(Number(msg.hostNow))) clockOffset = Number(msg.hostNow) - Date.now();
-          ownIdeas = []; ideas = []; render(); $('ideaInput').focus();
-        } else if (msg.type === 'ack') {
-          const item = ownIdeas.find(x => x.id === msg.id);
-          if (item) item.pending = false;
-        } else if (msg.type === 'reveal') {
-          ideas = Array.isArray(msg.ideas) ? msg.ideas.filter(x => x && typeof x.text === 'string') : [];
-          phase = 'reveal'; render();
-        } else if (msg.type === 'reset') {
-          phase = 'lobby'; ownIdeas = []; ideas = []; endsAt = 0; render();
-        }
-      }
-      function startRound() {
-        if (role !== 'host' || phase !== 'lobby') return;
-        duration = Number($('durationSelect').value) || 5;
-        endsAt = Date.now() + duration * 60000;
-        ownIdeas = []; ideas = []; phase = 'writing';
-        send({type:'start', duration, endsAt, hostNow:Date.now()});
-        render(); $('ideaInput').focus();
-      }
-      function addIdea() {
-        if (phase !== 'writing' || remainingMs() <= 0) return;
-        const text = textFromUser($('ideaInput').value);
-        if (!text) { $('ideaInput').focus(); return; }
-        const id = randomId();
-        if (role === 'guest') {
-          if (!connection?.open) return showToast('You are not connected to the room.');
-          const item = { id, text, author:'guest', pending:true };
-          ownIdeas.push(item);
-          if (!send({type:'idea',id,text})) { ownIdeas.pop(); return showToast('Could not send your idea.'); }
-        } else {
-          const item = {id,text,author:'host'};
-          ideas.push(item); ownIdeas.push(item);
-        }
-        $('ideaInput').value = ''; $('charCounter').textContent = '0/280';
-        renderOwnIdeas(); $('myIdeaList').scrollTop = $('myIdeaList').scrollHeight; $('ideaInput').focus();
-      }
-      function finishRound() {
-        if (role !== 'host' || phase !== 'writing') return;
-        phase = 'reveal';
-        send({type:'reveal', ideas}); render();
-      }
-      function newRound() {
-        if (role !== 'host' || phase !== 'reveal') return;
-        phase = 'lobby'; ideas = []; ownIdeas = []; endsAt = 0;
-        send({type:'reset'}); render();
-      }
-      function downloadText() {
-        const text = ['BRAINWRITE — SESSION IDEAS', `Room: ${code}`, `Date: ${new Date().toLocaleString()}`, `${ideas.length} ideas`, '', ...ideas.map((idea,i) => `${i+1}. ${idea.text}`)].join('\n\n');
-        const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = `brainwrite-${code.toLowerCase()}-ideas.txt`; document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1500);
-      }
-      function downloadPdf() {
-        if (!window.jspdf?.jsPDF) { showToast('PDF library unavailable. Use your browser’s Print → Save as PDF instead.'); window.print(); return; }
-        try {
-          const doc = new window.jspdf.jsPDF({ unit:'mm', format:'a4' });
-          const pageWidth = doc.internal.pageSize.getWidth();
-          const margin = 18, usableWidth = pageWidth - margin * 2;
-          let y = 20;
-          const base = () => { doc.setFillColor(247,245,251); doc.rect(0,0,pageWidth,37,'F'); doc.setTextColor(60,48,138); doc.setFont('helvetica','bold'); doc.setFontSize(23); doc.text('Brainwrite',margin,22); doc.setTextColor(116,109,133); doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.text(`Room ${code}  |  ${new Date().toLocaleDateString()}  |  ${ideas.length} ideas`, margin,31); y=47; };
-          base();
-          ideas.forEach((idea, i) => {
-            const lines = doc.splitTextToSize(idea.text, usableWidth - 18);
-            const cardHeight = Math.max(22, lines.length * 6 + 12);
-            if (y + cardHeight > 277) { doc.addPage(); base(); }
-            const bg = [[255,241,199],[232,225,255],[218,242,231],[255,229,230]][i%4];
-            doc.setFillColor(...bg); doc.roundedRect(margin,y,usableWidth,cardHeight,3,3,'F');
-            doc.setTextColor(112,103,117); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text(`#${String(i+1).padStart(2,'0')}`, margin+6,y+8);
-            doc.setTextColor(43,40,58); doc.setFont('helvetica','normal'); doc.setFontSize(12); doc.text(lines, margin+6,y+16);
-            y += cardHeight + 5;
-          });
-          if (!ideas.length) { doc.setTextColor(90); doc.text('No ideas were written in this session.',margin,y+5); }
-          doc.save(`brainwrite-${code.toLowerCase()}-ideas.pdf`);
-        } catch (e) { console.warn('PDF generation error:', e); showToast('PDF export failed. Try Print → Save as PDF.'); window.print(); }
-      }
-      const inviteLink = () => `${location.origin}${location.pathname}?room=${encodeURIComponent(code)}`;
-      async function copyString(value, successMessage) {
-        try { await navigator.clipboard.writeText(value); showToast(successMessage); }
-        catch (_) { showToast(`Copy manually: ${value}`); }
-      }
-
-      $('createBtn').addEventListener('click', createRoom);
-      $('joinForm').addEventListener('submit', (event) => { event.preventDefault(); joinRoom($('joinCode').value); });
-      $('joinCode').addEventListener('input', () => { $('joinCode').value = cleanCode($('joinCode').value); });
-      $('startBtn').addEventListener('click', startRound);
-      $('addIdeaBtn').addEventListener('click', addIdea);
-      $('ideaInput').addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); addIdea(); } });
-      $('ideaInput').addEventListener('input', () => { $('charCounter').textContent = `${$('ideaInput').value.length}/280`; });
-      $('endEarlyBtn').addEventListener('click', () => { if (confirm('Reveal the ideas now and end the writing round?')) finishRound(); });
-      $('newRoundBtn').addEventListener('click', () => { if (confirm('Start a fresh round? Your current ideas will be cleared. Download them first if you want to keep them.')) newRound(); });
-      $('leaveBtn').addEventListener('click', () => { if (confirm('Leave this room? Any ideas you have not downloaded may be lost.')) { updateBrowserUrl(); resetToHome('You left the room.'); } });
-      $('copyCodeBtn').addEventListener('click', () => copyString(code, 'Room code copied!'));
-      $('copyLinkBtn').addEventListener('click', () => copyString(inviteLink(), 'Invite link copied!'));
-      $('downloadTxtBtn').addEventListener('click', downloadText);
-      $('downloadPdfBtn').addEventListener('click', downloadPdf);
-      $('homeLogo').addEventListener('click', (e) => { if (role) { e.preventDefault(); if (confirm('Leave this room?')) resetToHome(); } });
-      window.addEventListener('pagehide', () => { if (peer) { try { peer.destroy(); } catch (_) {} } });
-      if (oldJoinParam) { $('joinCode').value = cleanCode(oldJoinParam); $('joinCode').focus(); }
-    })();
-  </script>
 </body>
 </html>
