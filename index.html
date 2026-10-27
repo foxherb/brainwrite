@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f5f1">
+  <meta name="description" content="A tiny, private-by-default brainwriting space for two people. Write freely, reveal together.">
+  <title>Brainwrite — Make space for every idea</title>
+  <style>
+    :root { --paper:#f7f5f1; --ink:#262636; --muted:#757584; --purple:#6351d5; --purple-dark:#5140be; --stroke:#e7e4e2; --card:#fff; --green:#277c65; --shadow:0 14px 35px rgba(43,39,62,.07); }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; min-height:100vh; background:var(--paper); color:var(--ink); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; line-height:1.5; }
+    button, input, textarea, select { font:inherit; }
+    button { cursor:pointer; }
+    button:disabled { cursor:not-allowed; opacity:.48; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline:3px solid #b8b0ff; outline-offset:3px; }
+    .hidden { display:none!important; }
+    .shell { max-width:1150px; margin:0 auto; padding:28px 30px 65px; }
+    .site-head { display:flex; align-items:center; justify-content:space-between; gap:15px; margin-bottom:56px; }
+    .brand { display:inline-flex; align-items:center; gap:11px; text-decoration:none; color:var(--ink); font-weight:850; font-size:20px; letter-spacing:-.8px; }
+    .brand-mark { width:34px; height:34px; border-radius:11px; display:grid; place-items:center; background:#6554d9; color:#fff; box-shadow:inset -4px -4px 0 rgba(0,0,0,.09); font-size:21px; }
+    .head-right { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .pill { border:1px solid var(--stroke); border-radius:999px; background:#fff9; padding:7px 14px; color:var(--muted); font-size:12px; font-weight:750; }
+    .eyebrow { text-transform:uppercase; letter-spacing:2px; color:var(--purple); font-size:11px; font-weight:850; }
+    .hero { display:grid; grid-template-columns:1.13fr .87fr; align-items:center; gap:45px; margin-bottom:52px; }
+    h1 { font-size:clamp(44px,5.7vw,72px); line-height:1.05; letter-spacing:-3.8px; margin:17px 0 18px; max-width:720px; }
+    h1 span { color:var(--purple); }
+    .hero p { margin:0; font-size:17px; max-width:500px; color:#71717f; line-height:1.75; }
+    .hero-art { height:282px; position:relative; }
+    .art-board { position:absolute; inset:16px 12px 12px 30px; border:1px solid #e9e3dd; border-radius:24px; background:linear-gradient(150deg,#fff 0%,#f9f6f3 100%); box-shadow:var(--shadow); transform:rotate(3deg); }
+    .art-note { width:169px; min-height:130px; position:absolute; padding:17px; border-radius:4px 15px 15px 15px; box-shadow:0 10px 24px #3830521b; font-weight:650; font-size:14px; line-height:1.55; }
+    .art-note::after { content:""; display:block; width:35px; height:5px; border-radius:4px; background:#0002; margin-top:15px; }
+    .art-1 { background:#ffdfa9; top:18px; left:40px; transform:rotate(-8deg); }
+    .art-2 { background:#d9ceff; top:72px; right:7px; transform:rotate(9deg); }
+    .art-3 { background:#cdeedc; bottom:2px; left:78px; transform:rotate(-4deg); }
+    .action-grid { display:grid; grid-template-columns:1fr 1fr; gap:19px; }
+    .panel { background:var(--card); border:1px solid #e9e5e3; border-radius:20px; padding:27px; box-shadow:var(--shadow); }
+    .panel-icon { border-radius:13px; width:42px; height:42px; display:grid; place-items:center; font-size:24px; background:#ede8ff; margin-bottom:18px; }
+    h2 { margin:0 0 8px; font-size:23px; line-height:1.2; letter-spacing:-.9px; }
+    h3 { margin:0 0 10px; font-size:17px; letter-spacing:-.4px; }
+    .sub { color:var(--muted); font-size:14px; margin:0 0 22px; line-height:1.65; }
+    .field-label { display:block; font-size:12px; font-weight:850; margin-bottom:8px; }
+    .field, .field-select { width:100%; padding:13px 15px; border:1px solid #dfdae7; border-radius:10px; background:#fff; font-size:15px; color:var(--ink); min-height:49px; }
+    .field-code { letter-spacing:5px; font-size:17px; font-weight:800; text-align:center; text-transform:uppercase; }
+    .btn { border:1px solid transparent; min-height:46px; padding:11px 17px; border-radius:11px; font-size:14px; font-weight:800; display:inline-flex; align-items:center; gap:8px; justify-content:center; transition:transform .14s, background .14s, box-shadow .14s; text-decoration:none; }
+    .btn:active:not(:disabled) { transform:translateY(1px); }
+    .btn-primary { background:var(--purple); color:#fff; }
+    .btn-primary:hover:not(:disabled) { background:var(--purple-dark); box-shadow:0 6px 15px #6351d52b; }
+    .btn-soft { color:var(--purple-dark); background:#f0edff; }
+    .btn-soft:hover:not(:disabled) { background:#e7e1ff; }
+    .btn-border { color:#4d4b58; border-color:#e3dfe5; background:#fff; }
+    .btn-border:hover:not(:disabled) { background:#faf9fb; }
+    .btn-danger { color:#ab4853; background:#fff; border-color:#f1d6d9; }
+    .btn-large { width:100%; margin-top:18px; }
+    .tiny-note { margin:24px 2px 0; color:#8d8993; font-size:12px; text-align:center; }
+    .session-top { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:28px; flex-wrap:wrap; }
+    .session-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .room-chip { background:#ebe7ff; border:1px solid #dbd3ff; padding:8px 13px; border-radius:10px; color:#5846bc; font-size:13px; font-weight:800; letter-spacing:2px; }
+    .connection-chip { font-size:12px; font-weight:750; display:inline-flex; align-items:center; gap:7px; color:var(--muted); }
+    .dot { display:inline-block; width:8px; height:8px; background:#f0ac44; border-radius:50%; }
+    .dot.connected { background:#45ae87; }
+    .session-hero { margin-bottom:24px; }
+    .session-hero h1 { font-size:clamp(35px,4.5vw,51px); letter-spacing:-2px; margin:10px 0; }
+    .session-hero p { font-size:15px; color:var(--muted); margin:0; }
+    .session-grid { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(290px,1fr); gap:18px; align-items:start; }
+    .feature-panel { min-height:355px; }
+    .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:22px 0 0; }
+    .stat { background:#f8f7fa; border-radius:12px; padding:17px; }
+    .stat .number { font-size:24px; font-weight:850; letter-spacing:-1px; }
+    .stat .caption { font-size:12px; color:#86818d; }
+    .code-hero { background:#f5f2ff; border:1px dashed #bfb4fb; color:#5140be; padding:19px; border-radius:15px; font-size:clamp(26px,4vw,38px); letter-spacing:7px; font-weight:900; text-align:center; margin:18px 0 14px; user-select:all; }
+    .control-row { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin-top:22px; }
+    .control-row .duration { flex:1; min-width:120px; }
+    .control-row .btn { min-width:166px; }
+    .instructions { counter-reset: steps; list-style:none; padding:0; margin:16px 0 0; }
+    .instructions li { display:flex; align-items:start; gap:10px; color:#666473; font-size:14px; padding:11px 0; border-bottom:1px solid #f2eef2; }
+    .instructions li:last-child { border-bottom:0; }
+    .step { background:#efedff; color:#6652cb; border-radius:8px; min-width:25px; height:25px; text-align:center; line-height:25px; font-weight:850; font-size:12px; }
+    .timer-wrap { background:#efecff; border-radius:14px; padding:20px 22px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:center; gap:14px; }
+    .timer-wrap .timer-big { font-size:37px; font-variant-numeric:tabular-nums; line-height:1; font-weight:900; color:#5342be; letter-spacing:-1.7px; }
+    .timer-caption { color:#867cc5; font-size:12px; font-weight:750; }
+    .timer-track { margin-top:13px; height:6px; border-radius:99px; background:#dfd9fa; overflow:hidden; }
+    .timer-fill { background:#6957dd; border-radius:99px; height:100%; width:100%; transition:width .25s; }
+    textarea.idea-field { resize:vertical; min-height:116px; line-height:1.55; font-size:17px; padding:17px; }
+    .idea-actions { margin-top:13px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .idea-hint { font-size:12px; color:#928d9a; }
+    kbd { background:#f5f4f6; padding:2px 5px; border-radius:4px; font-size:11px; border:1px solid #e6e3e7; }
+    .my-idea-list { list-style:none; margin:17px 0 0; padding:0; display:flex; flex-direction:column; gap:8px; max-height:330px; overflow:auto; }
+    .my-idea-list li { display:flex; gap:9px; align-items:flex-start; background:#faf8f4; padding:10px 12px; border-radius:9px; font-size:13px; color:#57535b; overflow-wrap:anywhere; }
+    .num-small { color:#a19aa4; min-width:19px; }
+    .empty-message { color:#9b96a1; font-size:14px; padding:10px 0; }
+    .board-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin:16px 0 25px; }
+    .board-toolbar .tools { display:flex; gap:9px; flex-wrap:wrap; }
+    .board { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; padding:8px 4px 35px; }
+    .sticky { border-radius:3px 18px 18px 18px; min-height:175px; padding:21px 22px 22px; box-shadow:0 6px 13px #3f365014, 0 14px 23px #3f365009; transform:rotate(var(--angle)); overflow-wrap:anywhere; display:flex; flex-direction:column; }
+    .sticky:nth-child(4n+1) { background:#fff0bd; }
+    .sticky:nth-child(4n+2) { background:#ded7ff; }
+    .sticky:nth-child(4n+3) { background:#d5efe2; }
+    .sticky:nth-child(4n) { background:#ffdfe0; }
+    .sticky .count { font-size:12px; font-weight:850; opacity:.45; margin-bottom:11px; }
+    .sticky .words { font-size:16px; font-weight:650; line-height:1.55; white-space:pre-wrap; }
+    .board-empty { grid-column:1/-1; padding:45px 20px; text-align:center; background:#fff; border:1px dashed #ded7df; border-radius:18px; color:var(--muted); }
+    .toast { position:fixed; bottom:23px; left:50%; transform:translate(-50%,16px); padding:13px 18px; max-width:min(520px,90vw); border-radius:13px; background:#282538; color:#fff; font-size:13px; box-shadow:0 12px 26px #17122644; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:4; text-align:center; }
+    .toast.show { opacity:1; transform:translate(-50%,0); }
+    .tip { background:#f9f8fb; padding:13px 15px; border-radius:11px; color:#7d7886; font-size:12px; line-height:1.6; }
+    footer { margin-top:40px; color:#96929c; font-size:12px; text-align:center; }
+    @media (max-width:840px) { .hero { grid-template-columns:1fr; gap:15px; } .hero-art { max-width:450px; width:100%; margin:0 auto; height:242px; } .session-grid { grid-template-columns:1fr; } .board { grid-template-columns:repeat(2,minmax(0,1fr)); } .site-head { margin-bottom:35px; } }
+    @media (max-width:580px) { .shell { padding:20px 16px 45px; } .site-head { margin-bottom:30px; } h1 { letter-spacing:-2.5px; } .hero-art { display:none; } .hero { margin-bottom:30px; } .action-grid { grid-template-columns:1fr; } .panel { padding:20px; border-radius:16px; } .session-hero h1 { font-size:35px; } .board { grid-template-columns:1fr; gap:12px; } .sticky { min-height:140px; transform:none; } .head-right .pill { display:none; } .control-row .btn { width:100%; } .stat-grid { grid-template-columns:1fr 1fr; } }
+    @media print { body { background:#fff; } .shell { max-width:none; padding:0; } .site-head, #homeView, #lobbyView, #writingView, #toast, .board-toolbar .tools, .session-top, footer { display:none!important; } #sessionView, #revealView { display:block!important; } .session-hero { margin:0 0 14px; } .session-hero h1 { font-size:27px; color:#000; } .session-hero p { font-size:11px; } .board { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding:0; } .sticky { transform:none; min-height:130px; border:1px solid #ddd; break-inside:avoid; -webkit-print-color-adjust:exact; print-color-adjust:exact; } .sticky .words { font-size:14px; } }
+  </style>
+  <script defer src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script defer src="firebase-config.js"></script>
+  <script defer src="app.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="site-head">
+      <a class="brand" href="." id="homeLogo" aria-label="Brainwrite home"><span class="brand-mark">✳</span> brainwrite<span style="color:#9d98ac">.</span></a>
+      <div class="head-right"><span class="pill">✦ Think freely. Share together.</span><span class="pill">No account needed</span></div>
+    </header>
+
+    <section id="homeView" aria-labelledby="homeTitle">
+      <div class="hero">
+        <div>
+          <div class="eyebrow">A tiny space for big ideas</div>
+          <h1 id="homeTitle">Great ideas start <span>somewhere.</span></h1>
+          <p>Think out loud, without saying a word. Write your ideas separately, then bring them together at the end. No noise, no judgment, just possibilities.</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="art-board"></div>
+          <div class="art-note art-1">What if we tried something different?</div>
+          <div class="art-note art-2">Could this be simpler?</div>
+          <div class="art-note art-3">That's actually a fun idea!</div>
+        </div>
+      </div>
+      <div id="setupNotice" class="tip" style="margin:0 0 22px; border:1px solid #e6cfa1; background:#fff5e2; color:#66522d; display:none">
+        <strong>One-time setup required:</strong> The website owner needs to connect Firebase before rooms can be created. Follow the README included with the files.
+      </div>
+      <div class="action-grid">
+        <div class="panel">
+          <div class="panel-icon">✦</div><h2>Start a session</h2>
+          <p class="sub">Create a room, get a short code, and invite someone to think with you.</p>
+          <button id="createBtn" class="btn btn-primary btn-large">Create a room <span aria-hidden="true">→</span></button>
+        </div>
+        <form class="panel" id="joinForm">
+          <div class="panel-icon" style="background:#e6f7ec">↗</div><h2>Join a session</h2>
+          <p class="sub">Got a room code? Type it below to join your partner.</p>
+          <label class="field-label" for="joinCode">6-character room code</label>
+          <input id="joinCode" class="field field-code" maxlength="6" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABC234" aria-describedby="codeHint" required>
+          <button id="joinBtn" type="submit" class="btn btn-primary btn-large">Join room <span aria-hidden="true">→</span></button>
+          <div id="codeHint" style="font-size:11px;color:#98919d;margin-top:9px">Letters and numbers, no password required.</div>
+        </form>
+      </div>
+      <p class="tiny-note">☁️ Temporary live room on Firebase. No accounts to create, and the room is deleted when the host leaves.</p>
+    </section>
+
+    <section id="sessionView" class="hidden" aria-label="Brainwriting room">
+      <div class="session-top">
+        <div class="session-meta"><span class="room-chip" id="roomChip">------</span><span class="connection-chip"><span id="connectionDot" class="dot"></span><span id="connectionText">Waiting for partner</span></span></div>
+        <button class="btn btn-border" id="leaveBtn">Leave room</button>
+      </div>
+
+      <div id="lobbyView">
+        <div class="session-hero"><div class="eyebrow">Room created</div><h1>Make room for ideas.</h1><p id="lobbyDescription">Share the code with your partner, then start when you're ready.</p></div>
+        <div class="session-grid">
+          <div class="panel feature-panel">
+            <h2>Invite your thinking partner</h2><p class="sub">They can enter this code on the homepage, or use a direct link.</p>
+            <div class="code-hero" id="roomCodeDisplay">------</div>
+            <div class="control-row"><button class="btn btn-soft" id="copyCodeBtn">Copy code</button><button class="btn btn-border" id="copyLinkBtn">Copy invite link</button></div>
+            <div id="hostControls" class="hidden">
+              <div style="height:1px;background:#f0edf0;margin:27px 0"></div>
+              <h3>Ready to write?</h3><p class="sub" style="margin-bottom:10px">Choose how long everyone gets to brainstorm.</p>
+              <div class="control-row"><div class="duration"><label class="field-label" for="durationSelect">Writing time</label><select class="field-select" id="durationSelect"><option value="3">3 minutes</option><option value="5" selected>5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="20">20 minutes</option></select></div><button id="startBtn" class="btn btn-primary">Start writing →</button></div>
+              <p class="tip" style="margin:16px 0 0">The Start button unlocks when your partner joins. Both people wait in the lobby until you press Start.</p>
+            </div>
+            <div id="guestWaiting" class="hidden tip" style="margin-top:20px">You're connected! The room creator will start the timer.</div>
+          </div>
+          <aside class="panel"><h3>How it works</h3><ol class="instructions"><li><span class="step">1</span><span>Write every idea that comes to mind.</span></li><li><span class="step">2</span><span>Press Enter to make a new note. Keep writing.</span></li><li><span class="step">3</span><span>Ideas stay hidden from the other person.</span></li><li><span class="step">4</span><span>When time is up, reveal and discuss everything together.</span></li></ol></aside>
+        </div>
+      </div>
+
+      <div id="writingView" class="hidden">
+        <div class="session-hero"><div class="eyebrow">The writing phase</div><h1>Let the ideas flow.</h1><p>One thought per note. Don't overthink it — you can sort through them later.</p></div>
+        <div class="session-grid">
+          <div class="panel feature-panel">
+            <div class="timer-wrap"><div><div class="timer-caption">TIME REMAINING</div><div class="timer-big" id="timerBig" role="timer" aria-label="Time remaining">05:00</div></div><div aria-hidden="true" style="font-size:31px">⏳</div></div>
+            <div class="timer-track" style="margin-top:-17px;margin-bottom:28px"><div class="timer-fill" id="timerFill"></div></div>
+            <label class="field-label" for="ideaInput">Your next idea</label>
+            <textarea id="ideaInput" class="field idea-field" maxlength="280" placeholder="What if we…" rows="3"></textarea>
+            <div class="idea-actions"><span class="idea-hint"><kbd>Enter</kbd> to add · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line · <span id="charCounter">0/280</span></span><button id="addIdeaBtn" class="btn btn-primary">+ Add idea</button></div>
+            <p class="tip" style="margin-top:23px">Keep going! All ideas are welcome. You won't see your partner's notes until the reveal.</p>
+          </div>
+          <aside class="panel"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 style="margin:0">Your ideas</h3><span class="pill" id="ownCount">0 notes</span></div><p class="sub" style="margin:10px 0 0">Only your notes appear here for now.</p><div id="myIdeasEmpty" class="empty-message">Your first idea is one thought away ✨</div><ol class="my-idea-list" id="myIdeaList"></ol><div id="endEarlyArea" class="hidden" style="margin-top:20px;border-top:1px solid #f0edf0;padding-top:16px"><button class="btn btn-border" id="endEarlyBtn">Reveal ideas now</button></div></aside>
+        </div>
+      </div>
+
+      <div id="revealView" class="hidden">
+        <div class="session-hero"><div class="eyebrow">The big reveal ✨</div><h1>Look at all these ideas.</h1><p>Read them together. Notice patterns, explore surprises, and find what sticks.</p></div>
+        <div class="board-toolbar"><div><strong id="totalCount">0 ideas</strong><span style="color:#99929c;font-size:13px"> · One creative session</span></div><div class="tools"><button id="downloadPdfBtn" class="btn btn-primary">↓ Download PDF</button><button id="downloadTxtBtn" class="btn btn-border">↓ Download text</button><button id="newRoundBtn" class="btn btn-soft hidden">↻ New round</button></div></div>
+        <div id="board" class="board" aria-label="All shared ideas"></div>
+      </div>
+    </section>
+
+    <footer>Made for thinking together. <span aria-hidden="true">♡</span> Temporary room data · No personal sign-up required.</footer>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+
+</body>
+</html>
